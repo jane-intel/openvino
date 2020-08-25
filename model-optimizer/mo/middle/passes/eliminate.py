@@ -220,7 +220,10 @@ def merge_data_nodes(graph, survived, removed):
 def remove_op_node_with_data_node(graph, node_to_remove):
     from mo.graph.graph import Node
     assert node_to_remove.kind == 'op'
-    input_data_node = node_to_remove.in_node()
+    input_data_node = [u for u, _ in graph.in_edges(node_to_remove.id)]
+    assert len(input_data_node) == 1, "Cannot remove node consuming two or more input tensors"
+    input_data_node = Node(graph, input_data_node[0])
+
     output_node = [v for _, v in graph.out_edges(node_to_remove.id)]
     assert len(output_node) == 1, "Cannot remove node producing two or more output tensors"
     output_node = Node(graph, output_node[0])
