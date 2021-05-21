@@ -319,6 +319,59 @@ std::shared_ptr<ngraph::Function> CNNNetworkNGraphImpl::cloneFunction(bool const
 }
 
 void CNNNetworkNGraphImpl::reshape() {
+    // save original parameters shape
+    const auto& parameters = _ngraph_function->get_parameters();
+
+    std::vector<ngraph::PartialShape> originalInputShapes;
+    for (const auto & param : parameters) {
+        const auto& pshape = param->get_partial_shape();
+        originalInputShapes.push_back(pshape);
+        ngraph::PartialShape new_pshape = ngraph::PartialShape::dynamic(pshape.rank());
+        for (int64_t i = 0; i < pshape.rank().get_length(); ++i)
+            new_pshape[i] = ngraph::Dimension{0, pshape[i].get_max_length()};
+        param->set_partial_shape(new_pshape);
+    }
+    _ngraph_function->validate_nodes_and_infer_types();
+
+    // checks
+    for (const auto& node : _ngraph_function->get_ordered_ops()) {
+        bool all_inputs_are_valid = true;
+        bool all_inputs_are_static = true;
+        const auto& inputs = node->inputs();
+        for (const auto& input : inputs) {
+            all_inputs_are_static &= input.get_partial_shape().is_static();
+            all_inputs_are_valid &= input.get_partial_shape().rank().is_static();
+            if (!all_inputs_are_valid)
+                break;
+            bool any_dim_is_dyn_with_ub = false;
+            for (const auto& dim : input.get_partial_shape())
+                any_dim_is_dyn_with_ub |= dim.is_dynamic() && dim.get_interval().has_upper_bound();
+            all_inputs_are_valid &= (any_dim_is_dyn_with_ub || input.get_partial_shape().is_static());
+        }
+        if (!all_inputs_are_valid || all_inputs_are_static || ngraph::is_type<ngraph::opset3::ShapeOf>(node))
+            continue;
+
+        bool all_outputs_are_invalid = true;
+        const auto& outputs = node->outputs();
+
+        for (const auto& output : outputs) {
+            const auto& pshape = output.get_partial_shape();
+            if (pshape.rank().is_dynamic())
+                continue;
+
+            bool any_dim_is_dyn_with_ub = false;
+            for (const auto& dim : pshape)
+                any_dim_is_dyn_with_ub |= dim.is_dynamic() && dim.get_interval().has_upper_bound();
+            all_outputs_are_invalid &= !any_dim_is_dyn_with_ub;
+        }
+
+        if (all_inputs_are_valid && all_outputs_are_invalid)
+            std::cout << "Possible fail: " << node << std::endl;
+    }
+    // restore
+    for (size_t i = 0; i < parameters.size(); ++i)
+        parameters[i]->set_partial_shape(originalInputShapes[i]);
+    _ngraph_function->validate_nodes_and_infer_types();
     reshape({});
 }
 
