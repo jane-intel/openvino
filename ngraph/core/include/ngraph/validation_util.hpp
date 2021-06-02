@@ -254,6 +254,16 @@ namespace ngraph
     NGRAPH_API
     bool rank_is_dynamic_or_equal_to(const PartialShape& shape, const Dimension::value_type& rank);
 
+    /// \brief Checks if rank of the shape is dynamic or is at least equal to provided rank
+    /// \return true if both checks pass otherwise false
+    NGRAPH_API
+    bool rank_is_at_least(const PartialShape& shape, const Dimension::value_type& rank);
+
+    /// \brief Checks if rank of the shape is dynamic or is at most equal to provided rank
+    /// \return true if both checks pass otherwise false
+    NGRAPH_API
+    bool rank_is_at_most(const PartialShape& shape, const Dimension::value_type& rank);
+
     /// \brief Try to compute the maximum value of value
     /// \return (true, max_value) if can be determined, or (false,
     /// numeric_limits<uint64_t>::max()) if not.

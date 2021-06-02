@@ -1760,3 +1760,17 @@ bool ngraph::rank_is_dynamic_or_equal_to(const PartialShape& shape,
         return true;
     return shape.rank().get_length() == rank;
 }
+
+bool ngraph::rank_is_at_least(const PartialShape& shape, const Dimension::value_type& rank)
+{
+    if (shape.rank().is_dynamic())
+        return true;
+    return shape.rank().get_length() >= rank;
+}
+
+bool ngraph::rank_is_at_most(const PartialShape& shape, const Dimension::value_type& rank)
+{
+    if (shape.rank().is_dynamic())
+        return true;
+    return shape.rank().get_length() <= rank;
+}

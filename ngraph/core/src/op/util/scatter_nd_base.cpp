@@ -6,6 +6,7 @@
 #include "itt.hpp"
 #include "ngraph/node.hpp"
 #include "ngraph/shape.hpp"
+#include "ngraph/validation_util.hpp"
 
 using namespace std;
 using namespace ngraph;
@@ -51,24 +52,22 @@ void op::util::ScatterNDBase::validate_and_infer_types()
     NODE_VALIDATION_CHECK(
         this, updates_et == inputs_et, "Updates element type must be the same as inputs");
 
-    NODE_VALIDATION_CHECK(this,
-                          indices_rank.is_dynamic() || indices_rank.get_length() >= 1,
-                          "Indices rank is expected to be at least 1");
+    NODE_VALIDATION_CHECK(
+        this, rank_is_at_least(indices_shape, 1), "Indices rank is expected to be at least 1");
 
-    NODE_VALIDATION_CHECK(this,
-                          inputs_rank.is_dynamic() || indices_rank.is_dynamic() ||
-                              indices_shape[indices_rank.get_length() - 1].get_length() <=
-                                  inputs_rank.get_length(),
-                          "Last dimension of indices can be at most the rank of inputs");
+    NODE_VALIDATION_CHECK(
+        this,
+        indices_rank.is_dynamic() ||
+            dims_are_equal(indices_shape, indices_rank.get_length() - 1, inputs_rank),
+        "Last dimension of indices can be at most the rank of inputs");
 
     if (inputs_rank.is_static() && indices_rank.is_static() && updates_rank.is_static())
     {
-        auto expected_updates_rank = indices_rank.get_length() + inputs_rank.get_length() -
-                                     indices_shape[indices_rank.get_length() - 1].get_length() - 1;
+        auto expected_updates_rank = indices_rank + inputs_rank - indices_shape[indices_rank.get_length() - 1] - 1;
         // If expected updates rank is 0D it also can be a tensor with one element
         NODE_VALIDATION_CHECK(
             this,
-            updates_rank.get_length() == expected_updates_rank || expected_updates_rank == 0,
+            updates_rank.compatible(expected_updates_rank) || expected_updates_rank == 0,
             "Rank of updates must be rank of inputs + rank of indices - last dimension of indices "
             "- 1");
 
@@ -85,7 +84,7 @@ void op::util::ScatterNDBase::validate_and_infer_types()
                     "updates_shape[0:indices_rank-1] shape must be indices_shape[:-1]");
             }
             size_t j = indices_shape[static_indices_rank - 1].get_length();
-            for (int64_t i = static_indices_rank - 1; i < expected_updates_rank; i++, j++)
+            for (int64_t i = static_indices_rank - 1; i < expected_updates_rank.get_length(); i++, j++)
             {
                 compatible = compatible && updates_shape[i].same_scheme(inputs_shape[j]);
                 NODE_VALIDATION_CHECK(
