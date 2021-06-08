@@ -604,9 +604,13 @@ private:
 
 bool MKLDNNMVNNode::isSupportedOperation(const std::shared_ptr<const ngraph::Node>& op, std::string& errorMessage) noexcept {
     try {
-        std::cout << "+++ MVN +++" << op << std::endl;
         if (op->get_output_partial_shape(0).rank().is_dynamic()) {
-            errorMessage = "Dynamic input rank";
+            errorMessage = "Unsupported dynamic input rank.";
+            return false;
+        }
+        const auto& inDataRank = op->get_output_partial_shape(0).rank().get_length();
+        if (inDataRank < 1 || inDataRank > 5) {
+            errorMessage = "First input accepts ranks from 1 to 5. Actual: " + std::to_string(inDataRank);
             return false;
         }
         const auto& inDataRank = op->get_output_partial_shape(0).rank().get_length();
