@@ -19,13 +19,13 @@ public:
 
     FullyConnectedNode(const ngraph::Output<Node> &A,
                        const ngraph::Output<Node> &B,
-                       const ngraph::Shape &output_shape,
+                       const ngraph::PartialShape &output_shape,
                        const ngraph::element::Type output_type = ngraph::element::undefined);
 
     FullyConnectedNode(const ngraph::Output<Node> &A,
                        const ngraph::Output<Node> &B,
                        const ngraph::Output<Node> &C,
-                       const ngraph::Shape &output_shape,
+                       const ngraph::PartialShape &output_shape,
                        const ngraph::element::Type output_type = ngraph::element::undefined);
 
     bool visit_attributes(ngraph::AttributeVisitor &visitor) override;
@@ -40,7 +40,7 @@ public:
 
 private:
     size_t m_output_size = 0;
-    ngraph::Shape m_output_shape = {};
+    ngraph::PartialShape m_output_shape = {};
     ngraph::element::Type m_output_type;
 };
 
