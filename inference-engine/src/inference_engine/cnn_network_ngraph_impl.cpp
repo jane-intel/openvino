@@ -462,6 +462,7 @@ StatusCode CNNNetworkNGraphImpl::serialize(const std::string& xmlPath,
             custom_opsets.insert(begin(opset), end(opset));
         }
         ngraph::pass::Manager manager;
+        manager.set_pass_visualization(false);
         manager.register_pass<ngraph::pass::Serialize>(
             xmlPath, binPath, ngraph::pass::Serialize::Version::IR_V10,
             custom_opsets);
