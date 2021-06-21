@@ -39,7 +39,15 @@ void MKLDNNPlugin::FullyConnectedNode::validate_and_infer_types() {
     if (m_output_shape.rank().is_static() && m_output_shape.rank().get_length() > 1 &&
             m_output_shape[m_output_shape.rank().get_length() - 1].is_static())
         m_output_size = static_cast<size_t>(m_output_shape[m_output_shape.rank().get_length() - 1].get_length());
-    set_output_type(0, m_output_type, m_output_shape);
+
+    auto data_pshape = get_input_partial_shape(0), w_pshape = get_input_partial_shape(1);
+    auto data_rank = data_pshape.rank(), w_rank = w_pshape.rank();
+    if (data_rank.is_static() && data_rank.get_length() >= 2 && w_rank.is_static() && w_rank.get_length() >= 1) {
+        data_pshape[data_rank.get_length() - 1] = w_pshape[0];
+        set_output_type(0, m_output_type, data_pshape);
+    } else {
+        set_output_type(0, m_output_type, m_output_shape);
+    }
 }
 
 bool MKLDNNPlugin::FullyConnectedNode::visit_attributes(ngraph::AttributeVisitor &visitor) {
