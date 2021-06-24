@@ -110,7 +110,10 @@ bool pass::GraphRewrite::apply_matcher_passes(shared_ptr<Function> f,
     {
         // Skip passes that are disabled
         if (pass_config->is_disabled(m_matchers[matcher_index]->get_type_info()))
+        {
+            std::cout << "Pass " << m_matchers[matcher_index]->get_name() << " disabled " << std::endl;
             continue;
+        }
 
         auto matcher = m_matchers[matcher_index]->get_matcher();
         if (!matcher)
@@ -241,6 +244,7 @@ bool pass::GraphRewrite::apply_matcher_passes(shared_ptr<Function> f,
             {
                 if (run_matcher_pass(m_matchers[matcher_index], node))
                 {
+                    std::cout << "Pass " << m_matchers[matcher_index]->get_name() << " did smth " << std::endl;
                     rewritten = true;
                     break;
                 }
@@ -252,12 +256,15 @@ bool pass::GraphRewrite::apply_matcher_passes(shared_ptr<Function> f,
             for (auto& m_pass : m_matchers)
             {
                 // Skip passes that are disabled
-                if (pass_config->is_disabled(m_pass->get_type_info()))
+                if (pass_config->is_disabled(m_pass->get_type_info())) {
+                    std::cout << "Pass " << m_pass->get_name() << " disabled" << std::endl;
                     continue;
+                }
 
                 if (run_matcher_pass(m_pass, node))
                 {
                     rewritten = true;
+                    std::cout << "Pass " << m_pass->get_name() << " did smth" << std::endl;
                     break;
                 }
             }

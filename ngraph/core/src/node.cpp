@@ -558,12 +558,12 @@ std::ostream& Node::write_description(std::ostream& out, uint32_t depth) const
 {
     if (depth == 0)
     {
-        out << get_friendly_name();
+        out << "n";
     }
     else
     {
         out << "v" << get_type_info().version << "::" << get_type_info().name << " "
-            << get_friendly_name() << " (";
+            << "n" << " (";
         string sep = "";
         for (const auto& arg : input_values())
         {

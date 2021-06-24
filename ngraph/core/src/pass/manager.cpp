@@ -68,7 +68,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
     {
         if (m_pass_config->is_disabled(pass->get_type_info()))
         {
-            NGRAPH_DEBUG << "Pass " << pass->get_name() << " is disabled";
+            std::cout << "Pass " << pass->get_name() << " is disabled" << std::endl;
             continue;
         }
 
@@ -86,7 +86,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             if (matcher_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) &&
                 func->is_dynamic())
             {
-                NGRAPH_DEBUG << "Pass " << pass->get_name() << " requires static shape but the "
+                std::cout << "Pass " << pass->get_name() << " requires static shape but the "
                              << "function is dynamic. Skipping this transformation";
                 continue;
             }
@@ -101,7 +101,7 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             if (function_pass->get_property(PassProperty::REQUIRE_STATIC_SHAPE) &&
                 func->is_dynamic())
             {
-                NGRAPH_DEBUG << "Pass " << pass->get_name() << " requires static shape but the "
+                std::cout << "Pass " << pass->get_name() << " requires static shape but the "
                              << "function is dynamic. Skipping this transformation";
                 continue;
             }
@@ -117,6 +117,8 @@ void pass::Manager::run_passes(shared_ptr<Function> func)
             else
             {
                 function_changed = function_pass->run_on_function(func);
+                if (function_changed)
+                    std::cout << "Pass " << pass->get_name() << " did smth" <<std::endl;
             }
         }
         else if (auto node_pass = dynamic_pointer_cast<NodePass>(pass))

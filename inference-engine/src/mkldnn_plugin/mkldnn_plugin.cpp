@@ -112,15 +112,28 @@ Engine::~Engine() {
     ExecutorManager::getInstance()->clear("CPUCallbackExecutor");
 }
 
-static void Transformation(CNNNetwork& clonedNetwork, const Config& conf) {
+static void Transformation(CNNNetwork& clonedNetwork, const Config& conf, size_t type_of_transform) {
     auto nGraphFunc = clonedNetwork.getFunction();
+
+    std::map<std::shared_ptr<ngraph::opset1::Parameter>, ngraph::PartialShape> input_to_shape;
+    const auto parameters = nGraphFunc->get_parameters();
+
+    if (type_of_transform == 2) {
+        for (const auto& parameter : parameters) {
+            auto rank = parameter->get_partial_shape().rank();
+            input_to_shape[parameter] = parameter->get_partial_shape();
+            auto new_shape = ngraph::PartialShape::dynamic(rank);
+            if (rank.is_static() && (rank == 4 || rank == 5))
+                new_shape[1] = parameter->get_partial_shape()[1];
+            parameter->set_partial_shape(new_shape);
+        }
+        nGraphFunc->validate_nodes_and_infer_types();
+    }
 
     ngraph::pass::Manager manager;
     manager.register_pass<ngraph::pass::InitNodeInfo>();
 
-    const bool useLpt =
-        (conf.lpTransformsMode == Config::LPTransformsMode::On) &&
-        ngraph::pass::low_precision::LowPrecisionTransformer::isFunctionQuantized(nGraphFunc);
+    const bool useLpt = false;
     if (useLpt) {
         manager.register_pass<ngraph::pass::DisableConvertConstantFoldingOnConstPath>(
             std::vector<ngraph::element::Type>{ ngraph::element::i8, ngraph::element::u8, ngraph::element::i4, ngraph::element::u4 });
@@ -367,6 +380,13 @@ static void Transformation(CNNNetwork& clonedNetwork, const Config& conf) {
     postLPTPassManager.run_passes(nGraphFunc);
 
     ConvertToCPUSpecificOpset(nGraphFunc);
+
+    if (type_of_transform == 5) {
+        for (const auto& parameter : parameters) {
+            parameter->set_partial_shape(input_to_shape[parameter]);
+        }
+        nGraphFunc->validate_nodes_and_infer_types();
+    }
 }
 
 InferenceEngine::IExecutableNetworkInternal::Ptr
@@ -402,11 +422,23 @@ Engine::LoadExeNetworkImpl(const InferenceEngine::CNNNetwork &network, const std
         conf.batchLimit = static_cast<int>(network.getBatchSize());
     }
 
-    CNNNetwork clonedNetwork = InferenceEngine::details::cloneNetwork(network);
+//    CNNNetwork clonedNetwork = InferenceEngine::details::cloneNetwork(network);
+    CNNNetwork dynamic_clonedNetwork = InferenceEngine::details::cloneNetwork(network);
+//    std::cout << "STATIC" << std::endl;
+//    Transformation(clonedNetwork, conf, 0);
+//    std::cout << "DYNAMIC" << std::endl;
+    Transformation(dynamic_clonedNetwork, conf, 2);
 
-    Transformation(clonedNetwork, conf);
+//    for (const auto & node : dynamic_clonedNetwork.getFunction()->get_ordered_ops()) {
+//        bool output_dynamic = false;
+//        for (const auto& in : node->outputs())
+//            if (in.get_partial_shape().is_dynamic())
+//                output_dynamic = true;
+//        if (node->is_dynamic() || output_dynamic)
+//            std::cout << "DYNAMIC: " << node << std::endl;
+//    }
 
-    return std::make_shared<MKLDNNExecNetwork>(clonedNetwork, conf, extensionManager, weightsSharing);
+    return std::make_shared<MKLDNNExecNetwork>(dynamic_clonedNetwork, conf, extensionManager, weightsSharing);
 }
 
 void Engine::SetConfig(const std::map<std::string, std::string> &config) {
@@ -525,7 +557,7 @@ QueryNetworkResult Engine::QueryNetwork(const CNNNetwork& network, const std::ma
 
         auto clonedNetwork = InferenceEngine::details::cloneNetwork(network);
         auto ops = clonedNetwork.getFunction()->get_ordered_ops();
-        Transformation(clonedNetwork, conf);
+        Transformation(clonedNetwork, conf, 0);
         std::unordered_set<std::string> supported;
         std::unordered_set<std::string> unsupported;
         for (auto op : ops) {
