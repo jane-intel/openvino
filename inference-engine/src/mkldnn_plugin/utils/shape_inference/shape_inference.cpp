@@ -24,6 +24,25 @@ void shape_inference(ov::Node* op,
         bool status = resolve_auto_pad_for_shape(node, pads_begin, pads_end, input_shapes, 2, 2);
         OPENVINO_ASSERT(status, "Convolution shape inference doesn't have enough information to calculate static shapes");
         shape_infer(node, pads_begin, pads_end, input_shapes, output_shapes);
+    } else if (auto node = ov::as_type<ov::opset8::GroupConvolution>(op)) {
+        ov::CoordinateDiff pads_begin, pads_end;
+        bool status = resolve_auto_pad_for_shape(node, pads_begin, pads_end, input_shapes, 2, 3);
+        OPENVINO_ASSERT(status, "GroupConvolution shape inference doesn't have enough information to calculate static shapes");
+        shape_infer(node, pads_begin, pads_end, input_shapes, output_shapes);
+    } else if (auto node = ov::as_type<ov::opset8::ConvolutionBackpropData>(op)) {
+        ov::CoordinateDiff pads_begin, pads_end;
+        ov::StaticShape output_shape_input;
+        get_data_as_shape<ov::StaticShape>(2, op, output_shape_input, constant_data);
+        bool status = resolve_auto_pad_for_shape_back_prop(node, pads_begin, pads_end, input_shapes, output_shape_input, 2, 2);
+        OPENVINO_ASSERT(status, "ConvolutionBackpropData shape inference doesn't have enough information to calculate static shapes");
+        shape_infer(node, pads_begin, pads_end, output_shape_input, input_shapes, output_shapes);
+    } else if (auto node = ov::as_type<ov::opset8::GroupConvolutionBackpropData>(op)) {
+        ov::CoordinateDiff pads_begin, pads_end;
+        ov::StaticShape output_shape_input;
+        get_data_as_shape<ov::StaticShape>(2, op, output_shape_input, constant_data);
+        bool status = resolve_auto_pad_for_shape_back_prop(node, pads_begin, pads_end, input_shapes, output_shape_input, 2, 3);
+        OPENVINO_ASSERT(status, "GroupConvolutionBackpropData shape inference doesn't have enough information to calculate static shapes");
+        shape_infer(node, pads_begin, pads_end, output_shape_input, input_shapes, output_shapes);
     } else if (auto node = ov::as_type<ov::op::util::ArithmeticReductionKeepDims>(op)) {
         shape_infer(node, input_shapes, output_shapes, constant_data);
     } else if (auto node = ov::as_type<ov::op::util::LogicalReductionKeepDims>(op)) {

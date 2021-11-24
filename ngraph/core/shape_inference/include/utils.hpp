@@ -33,3 +33,29 @@ inline bool get_data_as_int64<ov::PartialShape>(
     }
     return true;
 }
+
+template <class T>
+inline bool get_data_as_shape(
+        size_t idx, const ov::Node* op, T& shape,
+        const std::map<size_t, std::shared_ptr<ngraph::runtime::HostTensor>>& constant_data = {}) {
+    if (constant_data.count(idx)) {
+        shape = T(ov::opset1::Constant(constant_data.at(idx)).cast_vector<size_t>());
+    } else {
+        const auto& constant = ov::as_type_ptr<ov::opset1::Constant>(op->get_input_node_shared_ptr(idx));
+        NODE_VALIDATION_CHECK(op, constant != nullptr, "Static shape inference lacks constant data on port ", idx);
+        shape = T(constant->cast_vector<size_t>());
+    }
+    return true;
+}
+
+template <>
+inline bool get_data_as_shape<ov::PartialShape>(
+        size_t idx, const ov::Node* op, ov::PartialShape& shape,
+        const std::map<size_t, std::shared_ptr<ngraph::runtime::HostTensor>>& constant_data) {
+    if (constant_data.count(idx)) {
+        shape = ov::PartialShape(ov::opset1::Constant(constant_data.at(idx)).cast_vector<int64_t>());
+        return true;
+    } else {
+        return ov::evaluate_as_partial_shape(op->input_value(idx), shape);
+    }
+}
