@@ -561,7 +561,9 @@ void Transformations::PostLpt() {
     CPU_REGISTER_PASS_X64(postLPTPassManager, FuseFQtoInteraction);
 
     // Execute before snippets. Otherwise FQ will be converted to Subgraph
-    CPU_REGISTER_PASS_X64(postLPTPassManager, ConvertFqRnnToQuantizedRnn);
+    CPU_REGISTER_PASS_X64(postLPTPassManager, ov::pass::Validate)
+    CPU_REGISTER_PASS_X64(postLPTPassManager, ConvertFqRnnToQuantizedRnn)
+    CPU_REGISTER_PASS_X64(postLPTPassManager, ov::pass::Validate)
     postLPTPassManager.run_passes(model);
 }
 
