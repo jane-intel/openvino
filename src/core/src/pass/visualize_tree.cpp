@@ -197,10 +197,15 @@ bool ov::pass::VisualizeTree::run_on_model(const std::shared_ptr<ov::Model>& f) 
         add_node_arguments(node, height_maps, fake_node_ctr);
     });
 
+    const auto regex = ov::util::getenv_string("OV_VISUALIZE_SCOPE_REGEX");
+    if (!regex.empty()) {
+
+    }
     render();
 
     // Clean up local variable not to hold node pointers
     m_nodes_with_attributes.clear();
+    m_node_name_to_surrounding_fake_names.clear();
 
     return false;
 }
@@ -241,6 +246,7 @@ void ov::pass::VisualizeTree::add_node_arguments(std::shared_ptr<Node> node,
             m_ss << "    " << clone_name << " -> " << node->get_name()
                  << label_edge(arg, node, arg_index, jump_distance) << "\n";
             fake_node_ctr++;
+            m_node_name_to_surrounding_fake_names[node->get_name()].insert(clone_name);
         } else if (jump_distance > max_jump_distance) {
             m_ss << add_attributes(arg);
             m_ss << add_attributes(node);
@@ -256,8 +262,10 @@ void ov::pass::VisualizeTree::add_node_arguments(std::shared_ptr<Node> node,
                  << node->get_name() << "]\"]\n";
             m_ss << "    " << arg->get_name() << " -> " << send_node_name
                  << label_edge(arg, node, arg_index, jump_distance) << "\n";
+            m_node_name_to_surrounding_fake_names[arg->get_name()].insert(send_node_name);
             m_ss << "    " << recv_node_name << " -> " << node->get_name()
                  << label_edge(arg, node, arg_index, jump_distance) << "\n";
+            m_node_name_to_surrounding_fake_names[node->get_name()].insert(recv_node_name);
             fake_node_ctr++;
         } else {
             m_ss << add_attributes(arg);

@@ -51,6 +51,7 @@ protected:
 
     std::stringstream m_ss;
     std::string m_name;
+    std::unordered_map<std::string, std::unordered_set<std::string>> m_node_name_to_surrounding_fake_names;
     std::set<std::shared_ptr<Node>> m_nodes_with_attributes;
     visualize_tree_ops_map_t m_ops_to_details;
     node_modifiers_t m_node_modifiers = nullptr;
