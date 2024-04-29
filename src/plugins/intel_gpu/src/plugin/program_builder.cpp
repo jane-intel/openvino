@@ -8,6 +8,7 @@
 #include "openvino/op/lstm_cell.hpp"
 #include "openvino/op/loop.hpp"
 
+#include "intel_gpu/plugin/common_utils.hpp"
 #include "intel_gpu/plugin/program_builder.hpp"
 #include "intel_gpu/runtime/itt.hpp"
 #include "intel_gpu/runtime/debug_configuration.hpp"
@@ -193,6 +194,9 @@ bool ProgramBuilder::is_op_supported(const std::shared_ptr<ov::Node>& op) {
         // 2. We also check parameters of each operation, which means we have more
         //    reliable results of QueryNetwork call.
         prepare_build();
+        if (!data_types_are_supported(op.get()))
+            return false;
+
         allow_new_shape_infer = requires_new_shape_infer(op);
         CreateSingleLayerPrimitive(op);
         cleanup_build();
@@ -335,9 +339,6 @@ bool ProgramBuilder::requires_new_shape_infer(const std::shared_ptr<ov::Node>& o
         if (op->get_output_partial_shape(i).is_dynamic())
             return true;
     }
-
-    if (ov::is_type<op::FullyConnectedCompressed>(op))
-        return true;
 
     for (size_t i = 0; i < op->get_output_size(); i++) {
         if (op->get_output_partial_shape(i).size() > 6)
