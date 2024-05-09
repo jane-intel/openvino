@@ -8,10 +8,12 @@
 #include "openvino/core/descriptor_tensor.hpp"
 #include "openvino/core/validation_util.hpp"
 #include "openvino/op/add.hpp"
+#include "openvino/op/equal.hpp"
 #include "openvino/op/range.hpp"
 #include "openvino/op/reshape.hpp"
 #include "openvino/op/select.hpp"
 #include "openvino/op/softmax.hpp"
+#include "openvino/op/shape_of.hpp"
 #include "openvino/op/util/symbolic_info.hpp"
 #include "openvino/pass/manager.hpp"
 #include "openvino/pass/pattern/op/or.hpp"
@@ -29,6 +31,7 @@
 #include "transformations/symbolic_transformations/symbol_optimization.hpp"
 #include "transformations/symbolic_transformations/utils.hpp"
 #include "transformations/utils/utils.hpp"
+#include "openvino/util/env_util.hpp"
 
 using namespace ov::pass;
 using namespace ov::symbol::util;
@@ -91,6 +94,36 @@ void special_case_range_symbol_propagation(const std::shared_ptr<ov::Node>& node
     node->set_output_type(0, node->get_output_element_type(0), output_shape);
 }
 
+void default_case_range_symbol_propagation(const std::shared_ptr<ov::Node>& node) {
+    /* Symbol propagation through specific Range operation
+          start = 0  shift = A  step == 1
+            \         /         /
+                Range
+             shape = [A]
+    */
+    if (!ov::is_type<ov::op::v0::Range>(node) && !ov::is_type<ov::op::v4::Range>(node))
+        return;
+
+    auto output_shape = node->get_output_partial_shape(0);
+    if (output_shape.rank().is_dynamic() || output_shape.size() != 1)
+        return;
+
+    auto step_value = ov::util::get_constant_from_source(node->input_value(2));
+    if (!step_value || step_value->cast_vector<int64_t>()[0] != 1)
+        return;
+
+    auto start_value = ov::util::get_constant_from_source(node->input_value(0));
+    if (!start_value || start_value->cast_vector<int64_t>()[0] != 0)
+        return;
+
+    auto stop_symbols = node->get_input_tensor(1).get_value_symbol();
+    if (stop_symbols.size() != 1 || stop_symbols[0] == nullptr)
+        return;
+    auto stop_symbol = stop_symbols[0];
+    output_shape[0].set_symbol(stop_symbol);
+    node->set_output_type(0, node->get_output_element_type(0), output_shape);
+}
+
 void transfer_symbols(const ov::PartialShape& from, const ov::PartialShape& to) {
     if (from.rank().is_dynamic() || to.rank().is_dynamic() || from.size() != to.size())
         return;
@@ -147,6 +180,7 @@ bool ov::pass::SymbolicPropagation::run_on_model(const std::shared_ptr<ov::Model
 
         // additional symbol propagation rules must be triggered here
         special_case_range_symbol_propagation(op);
+        default_case_range_symbol_propagation(op);
         special_case_read_value_symbol_propagation(op, cache);
         // additional symbol propagation rules must be triggered here
 
@@ -218,12 +252,15 @@ ov::pass::SymbolicOptimizations::SymbolicOptimizations(bool full_run) {
     m_manager->set_per_pass_validation(false);
 
 #define REGISTER_SYMBOLIC(region, ...) m_manager->register_pass<region>(__VA_ARGS__);
-
+    REGISTER_SYMBOLIC(SimplifyShapeOfSubGraph)
+    REGISTER_SYMBOLIC(NopBroadcastSubGraph2)
     REGISTER_SYMBOLIC(SymbolicPropagation)
     if (full_run) {
         // symbolic based transformations allowing for better static dimension propagation
         REGISTER_SYMBOLIC(ChainedMaximumOptimization)
         REGISTER_SYMBOLIC(NopBroadcast)
+        REGISTER_SYMBOLIC(NopBroadcastSubGraph)
+        REGISTER_SYMBOLIC(NopBroadcastSubGraph2)
         // regular transformations which are needed right now since they clean up unnecessary operations
         REGISTER_SYMBOLIC(NopElimination)        // Broadcast (Tile) Ones + Remove Slice Before GatherElements
         REGISTER_SYMBOLIC(SharedOpOptimization)  // Shared GatherElements
@@ -240,9 +277,109 @@ ov::pass::SymbolicOptimizations::SymbolicOptimizations(bool full_run) {
     }
 }
 
+static std::vector<bool> constant_mask(const ov::descriptor::Tensor& tensor) {
+    const auto& lv = tensor.get_lower_value(), &uv = tensor.get_upper_value();
+    if (!lv || !uv)
+        return {};
+    const auto& lower = std::make_shared<ov::op::v0::Parameter>(lv.get_element_type(), lv.get_shape());
+    const auto& upper = std::make_shared<ov::op::v0::Parameter>(uv.get_element_type(), uv.get_shape());
+    const auto& result = std::make_shared<ov::op::v1::Equal>(lower, upper);
+    ov::Model m(ov::OutputVector{result}, ov::ParameterVector{lower, upper});
+    ov::TensorVector output(1);
+    m.evaluate(output, {lv, uv});
+    return ov::op::v0::Constant(output[0]).cast_vector<bool>();
+}
+
+static void unique_symbols_in_model(const std::shared_ptr<ov::Model>& m) {
+    size_t num_shape_inferences = 0;
+    size_t num_value_inferences = 0;
+    size_t num_shape_op_ops = 0;
+    size_t num_shape_of_ops = 0;
+    std::unordered_set<std::shared_ptr<ov::Symbol>> known_symbols;
+
+    ov::pass::Validate().run_on_model(m);
+    ov::pass::SymbolicPropagation().run_on_model(m);
+
+    for (const auto& parameter : m->get_parameters())
+        for (const auto& dim : parameter->get_partial_shape())
+            if (const auto& symbol = dim.get_symbol())
+                known_symbols.insert(ov::symbol::ancestor_of(symbol));
+
+    for (const auto& variable : m->get_variables())
+        for (const auto& dim : variable->get_info().data_shape)
+            if (const auto& symbol = dim.get_symbol())
+                known_symbols.insert(ov::symbol::ancestor_of(symbol));
+
+    for (const auto& node : m->get_ops()) {
+        bool need_shape_inference = false, need_value_inference = false;
+
+        if (node->get_rt_info().count("VP"))
+            num_shape_op_ops++;
+        if (ov::is_type<ov::op::v0::ShapeOf>(node) || ov::is_type<ov::op::v3::ShapeOf>(node))
+            num_shape_of_ops++;
+
+        for (const auto& output : node->outputs()) {
+            const auto& shape = output.get_partial_shape();
+            if (shape.rank().is_dynamic())
+                continue;
+
+            for (const auto& dim : shape) {
+                if (dim.is_static())
+                    continue;
+                if (auto symbol = dim.get_symbol()) {
+                    const auto& root = ov::symbol::ancestor_of(symbol);
+                    if (known_symbols.count(root))
+                        continue;
+                    else {
+                        known_symbols.insert(root);
+                        need_shape_inference = true;
+                    }
+                } else {
+                    std::cout << "Dynamic dimension, empty symbol " << node->get_type_name() << std::endl;
+                }
+            }
+
+            const auto& value_symbols = output.get_tensor().get_value_symbol();
+            const auto& const_mask = constant_mask(output.get_tensor());
+            for (size_t i = 0; i < value_symbols.size(); ++i) {
+                if (!const_mask.empty() && const_mask[i])
+                    continue;
+                if (const auto& value_symbol = value_symbols[i]) {
+                    const auto& root = ov::symbol::ancestor_of(value_symbol);
+                    if (known_symbols.count(root))
+                        continue;
+                    else {
+                        known_symbols.insert(root);
+                        need_value_inference = true;
+                    }
+                } else {
+                    std::cout << "Dynamic value, empty symbol " << node->get_type_name() << std::endl;
+                }
+            }
+        }
+
+        if (need_shape_inference) {
+            num_shape_inferences += 1;
+//            std::cout << "SI: " << node->get_type_name() << " " << node->get_friendly_name() << std::endl;
+        }
+        if (need_value_inference) {
+//            std::cout << "VI: " << node->get_type_name() << " " << node->get_friendly_name() << std::endl;
+            num_value_inferences += 1;
+        }
+    }
+    std::cout << "# ops: " << m->get_ops().size() << std::endl;
+    std::cout << "# shape sub-graph ops: " << num_shape_op_ops << std::endl;
+    std::cout << "# shape of ops: " << num_shape_of_ops << std::endl;
+    std::cout << "# shape inferences: " << num_shape_inferences << " aka new symbol appeared as an outcome of an op" << std::endl;
+    std::cout << "# value inferences: " << num_value_inferences << " aka new symbol appeared on ShapeOf sub-graph" << std::endl;
+    std::cout << "# symbols: " << known_symbols.size() << std::endl;
+//    ov::pass::VisualizeTree(ov::util::getenv_string("OV_VISUALIZE_PATH")).run_on_model(m);
+}
+
 bool ov::pass::SymbolicOptimizations::run_on_model(const std::shared_ptr<ov::Model>& m) {
     RUN_ON_FUNCTION_SCOPE(SymbolicOptimizations);
     m_manager->run_passes(m);
+    unique_symbols_in_model(m);
     ov::remove_skip_invalidation_rti(m);
     return true;
 }

@@ -295,6 +295,9 @@ bool ov::could_propagate(const Output<Node>& output, std::vector<Node*>& result)
             nodes_to_do.pop();
         }
     }
+    if (status)
+        for (const auto& node : result)
+            node->get_rt_info()["VP"] = true;
     return status;
 }
 

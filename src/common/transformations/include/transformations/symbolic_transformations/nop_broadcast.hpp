@@ -10,6 +10,8 @@
 namespace ov {
 namespace pass {
 class TRANSFORMATIONS_API NopBroadcast;
+class TRANSFORMATIONS_API NopBroadcastSubGraph;
+class TRANSFORMATIONS_API NopBroadcastSubGraph2;
 }  // namespace pass
 }  // namespace ov
 
@@ -22,4 +24,24 @@ class ov::pass::NopBroadcast : public ov::pass::MatcherPass {
 public:
     OPENVINO_RTTI("NopBroadcast", "0");
     NopBroadcast();
+};
+
+/**
+ * @ingroup ov_transformation_common_api
+ * @brief Normalizes
+ */
+class ov::pass::NopBroadcastSubGraph : public ov::pass::MatcherPass {
+public:
+    OPENVINO_RTTI("NopBroadcastSubGraph", "0");
+    NopBroadcastSubGraph();
+};
+
+/**
+ * @ingroup ov_transformation_common_api
+ * @brief Normalizes
+ */
+class ov::pass::NopBroadcastSubGraph2 : public ov::pass::MatcherPass {
+public:
+    OPENVINO_RTTI("NopBroadcastSubGraph2", "0");
+    NopBroadcastSubGraph2();
 };

@@ -3,6 +3,7 @@
 //
 
 #include "transformations/common_optimizations/nop_elimination.hpp"
+#include "transformations/symbolic_transformations/nop_broadcast.hpp"
 
 #include <functional>
 #include <memory>
@@ -11,6 +12,7 @@
 #include "compare.hpp"
 #include "itt.hpp"
 #include "openvino/core/validation_util.hpp"
+#include "openvino/op/abs.hpp"
 #include "openvino/op/add.hpp"
 #include "openvino/op/broadcast.hpp"
 #include "openvino/op/concat.hpp"
@@ -820,7 +822,8 @@ ov::pass::EliminateNopBroadcast::EliminateNopBroadcast() {
 ov::pass::EliminateAbs::EliminateAbs() {
     MATCHER_SCOPE(EliminateAbs);
     auto root = pattern::wrap_type<op::v0::Abs>([](const Output<Node>& value) -> bool {
-        const auto& t = value.get_tensor().get_lower_value();
+
+        const auto& t = value.get_node_shared_ptr()->input_value(0).get_tensor().get_lower_value();
         const auto& s = value.get_partial_shape();
         if (!t || !value.get_element_type().is_integral_number() || s.is_dynamic() || shape_size(s.to_shape()) > 10)
             return false;
@@ -1058,6 +1061,7 @@ ov::pass::NopElimination::NopElimination(bool use_shape_for_elimination) {
         ADD_MATCHER_FOR_THIS(PrepareShapeOpsForEliminationAroundBE)
         ADD_MATCHER_FOR_THIS(EliminateBroadcast)
         ADD_MATCHER_FOR_THIS(EliminateNopBroadcast)
+        ADD_MATCHER_FOR_THIS(NopBroadcastSubGraph2)
         ADD_MATCHER_FOR_THIS(NopSliceBeforeGatherElements)
         ADD_MATCHER_FOR_THIS(NopStridedSliceByShape)
         ADD_MATCHER_FOR_THIS(EliminateGather)

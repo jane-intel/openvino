@@ -18,6 +18,7 @@ class TRANSFORMATIONS_API GroupedGatherElimination;
 class TRANSFORMATIONS_API GatherNopElimination;
 class TRANSFORMATIONS_API SimplifyGatherShapeOf;
 class TRANSFORMATIONS_API SimplifySecondInputOfReshape;
+class TRANSFORMATIONS_API AbsPropagationUp;
 
 }  // namespace pass
 }  // namespace ov
@@ -79,4 +80,15 @@ class ov::pass::SimplifySecondInputOfReshape : public ov::pass::MatcherPass {
 public:
     OPENVINO_RTTI("SimplifySecondInputOfReshape", "0");
     SimplifySecondInputOfReshape();
+};
+
+/**
+ * @ingroup ov_transformation_common_api
+ * @brief AbsPropagationUp matches `concat->abs` on 1D tensors and pushes abs up the concat inputs
+ * in hope that they will constant fold
+ */
+class ov::pass::AbsPropagationUp : public ov::pass::MatcherPass {
+public:
+    OPENVINO_RTTI("AbsPropagationUp", "0");
+    AbsPropagationUp();
 };

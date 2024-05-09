@@ -132,7 +132,9 @@ Dimension Dimension::operator+(const Dimension& dim) const {
         return *this;
     else if (m_dimension == 0)
         return dim;
-    return Dimension(m_dimension + dim.m_dimension);
+    auto result = Dimension(m_dimension + dim.m_dimension);
+    result.m_symbol = m_symbol + dim.m_symbol;
+    return result;
 }
 
 Dimension Dimension::operator-(const Dimension& dim) const {
@@ -205,6 +207,14 @@ bool Dimension::broadcast_merge(Dimension& dst, const Dimension& d1, const Dimen
     bool d1_has_1 = d1.m_dimension.contains(1);
     bool d2_has_1 = d2.m_dimension.contains(1);
     if (d1_has_1 && d2_has_1) {
+        if (d1 == 1 && d2 != 1) {
+            dst = d2;
+            return true;
+        }
+        if (d1 != 1 && d2 == 1) {
+            dst = d1;
+            return true;
+        }
         auto result = ov::Interval(std::min(d1.m_dimension.get_min_val(), d2.m_dimension.get_min_val()),
                                    std::max(d1.m_dimension.get_max_val(), d2.m_dimension.get_max_val()));
         if (result.empty())

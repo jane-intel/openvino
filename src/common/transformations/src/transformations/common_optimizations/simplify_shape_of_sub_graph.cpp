@@ -11,6 +11,7 @@
 #include "itt.hpp"
 #include "openvino/core/rt_info.hpp"
 #include "openvino/core/validation_util.hpp"
+#include "openvino/op/abs.hpp"
 #include "openvino/op/concat.hpp"
 #include "openvino/op/constant.hpp"
 #include "openvino/op/fake_quantize.hpp"
@@ -314,12 +315,34 @@ pass::SimplifySecondInputOfReshape::SimplifySecondInputOfReshape() {
     this->register_matcher(m, callback);
 }
 
+
+pass::AbsPropagationUp::AbsPropagationUp() {
+    MATCHER_SCOPE(AbsPropagationUp);
+    const auto concat_label = wrap_type<op::v0::Concat>(pattern::rank_equals(1));
+    const auto abs_label = wrap_type<op::v0::Abs>({concat_label});
+
+    matcher_pass_callback callback = [=](Matcher& m) {
+        auto abs = m.get_match_root();
+        auto concat = m.get_pattern_map().at(concat_label);
+        for (const auto& input : concat->inputs()) {
+            auto new_abs = ov::op::util::make_try_fold<op::v0::Abs>(input.get_source_output());
+            input.replace_source_output(new_abs);
+            copy_runtime_info(abs, new_abs);
+        }
+        return replace_output_update_name(abs->output(0), abs->input_value(0));
+    };
+    auto m = std::make_shared<Matcher>(abs_label, matcher_name);
+    this->register_matcher(m, callback);
+}
+
+
 bool pass::SimplifyShapeOfSubGraph::run_on_model(const std::shared_ptr<Model>& f) {
     RUN_ON_FUNCTION_SCOPE(SimplifyShapeOfSubGraph);
     Manager manager;
     manager.set_per_pass_validation(false);
 
     REGISTER_PASS(manager, PrepareShapeOpsForEliminationAroundBE)
+    REGISTER_PASS(manager, AbsPropagationUp)
     REGISTER_PASS(manager, SharedOpOptimization)
     REGISTER_PASS(manager, EliminateGatherUnsqueeze)  // should run after SharedOpOptimization
     REGISTER_PASS(manager, NopElimination, m_use_shapes)
