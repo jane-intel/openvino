@@ -12,6 +12,9 @@
 #include "bound_evaluate.hpp"
 #include "element_visitor.hpp"
 #include "itt.hpp"
+#include "openvino/core/tensor_util.hpp"
+#include "openvino/op/maximum.hpp"
+#include "openvino/op/minimum.hpp"
 #include "openvino/reference/abs.hpp"
 #include "compare.hpp"
 
@@ -29,27 +32,19 @@ struct Evaluate : ov::element::NoAction<bool> {
     }
 };
 
-std::vector<bool> tensor_non_negative_or_non_interval(const ov::descriptor::Tensor& tensor) {
-    const auto& lower = std::make_shared<op::v0::Parameter>(tensor.get_element_type(), tensor.get_partial_shape());
-    const auto& upper = std::make_shared<op::v0::Parameter>(tensor.get_element_type(), tensor.get_partial_shape());
-    const auto& gr_eq = std::make_shared<op::v1::GreaterEqual>(lower, op::v0::Constant::create(tensor.get_element_type(), {}, {0}));
-    const auto& eq = std::make_shared<op::v1::Equal>(lower, upper);
-    const auto& result = std::make_shared<op::v1::LogicalOr>(gr_eq, eq);
-    ov::Model m(OutputVector{result}, ParameterVector{lower, upper});
-    ov::TensorVector output(1);
-    m.evaluate(output, {tensor.get_lower_value(), tensor.get_upper_value()});
-    return op::v0::Constant(output[0]).cast_vector<bool>();
+static bool evaluate_bound(const ov::op::v0::Abs* op, TensorVector& output_values, bool is_lower) {
+    const auto &lv = op->get_input_tensor(0).get_lower_value(), &uv = op->get_input_tensor(0).get_upper_value();
+    if (!lv || !uv || !op->has_evaluate())
+        return false;
+    TensorVector lower_output{ov::Tensor(lv.get_element_type(), lv.get_shape())},
+        upper_output{ov::Tensor(uv.get_element_type(), uv.get_shape())};
+    if (!op->evaluate(lower_output, {lv}) || !op->evaluate(upper_output, {uv}))
+        return false;
+    if (is_lower)
+        return v1::Minimum().evaluate(output_values, {lower_output[0], upper_output[0]});
+    else
+        return v1::Maximum().evaluate(output_values, {lower_output[0], upper_output[0]});
 }
-
-std::vector<bool> tensor_non_negative(const ov::descriptor::Tensor& tensor) {
-    const auto& lower = std::make_shared<op::v0::Parameter>(tensor.get_element_type(), tensor.get_partial_shape());
-    const auto& result = std::make_shared<op::v1::GreaterEqual>(lower, op::v0::Constant::create(tensor.get_element_type(), {}, {0}));
-    ov::Model m(OutputVector{result}, ParameterVector{lower});
-    ov::TensorVector output(1);
-    m.evaluate(output, {tensor.get_lower_value()});
-    return op::v0::Constant(output[0]).cast_vector<bool>();
-}
-
 }  // namespace abs
 
 namespace v0 {
@@ -99,29 +94,26 @@ bool Abs::has_evaluate() const {
     }
 }
 
-bool Abs::evaluate_lower(ov::TensorVector& output_values) const {
-    auto check_vector = ov::op::abs::tensor_non_negative_or_non_interval(get_input_tensor(0));
-    return std::all_of(check_vector.begin(), check_vector.end(), ov::cmp::Equal<bool>(true))
-        && ov::default_lower_bound_evaluator(this, output_values);
+bool Abs::evaluate_lower(TensorVector& output_values) const {
+    return ov::op::abs::evaluate_bound(this, output_values, true);
 }
 
-bool Abs::evaluate_upper(ov::TensorVector& output_values) const {
-    auto check_vector = ov::op::abs::tensor_non_negative_or_non_interval(get_input_tensor(0));
-    return std::all_of(check_vector.begin(), check_vector.end(), ov::cmp::Equal<bool>(true))
-           && ov::default_upper_bound_evaluator(this, output_values);
+bool Abs::evaluate_upper(TensorVector& output_values) const {
+    return ov::op::abs::evaluate_bound(this, output_values, false);
 }
 
-bool Abs::evaluate_symbol(ov::TensorSymbolVector& output_symbols) const {
-    const auto& check_vector = ov::op::abs::tensor_non_negative(get_input_tensor(0));
+bool Abs::evaluate_symbol(TensorSymbolVector& output_symbols) const {
+    const auto& non_negative = ov::util::greater_equal(get_input_tensor(0).get_lower_value(), 0);
     const auto& input_symbols = get_input_tensor(0).get_value_symbol();
-    if (input_symbols.size() == check_vector.size()) {
-        output_symbols.resize(1);
-        output_symbols[0].resize(check_vector.size());
-        for (size_t i = 0; i < check_vector.size(); ++i)
-            output_symbols[0][i] = check_vector[i] ? input_symbols[i] : nullptr;
-        return true;
-    }
-    return false;
+    if (!non_negative || input_symbols.size() != ov::shape_size(non_negative.get_shape()))
+        return false;
+    auto non_negative_ptr = non_negative.data<char>();
+    output_symbols.resize(1);
+    output_symbols[0].resize(input_symbols.size(), nullptr);
+    for (size_t i = 0; i < input_symbols.size(); ++i)
+        if (non_negative_ptr[i])
+            output_symbols[0][i] = input_symbols[i];
+    return true;
 }
 }  // namespace v0
 }  // namespace op

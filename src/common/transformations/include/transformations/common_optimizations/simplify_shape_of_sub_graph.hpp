@@ -18,7 +18,7 @@ class TRANSFORMATIONS_API GroupedGatherElimination;
 class TRANSFORMATIONS_API GatherNopElimination;
 class TRANSFORMATIONS_API SimplifyGatherShapeOf;
 class TRANSFORMATIONS_API SimplifySecondInputOfReshape;
-class TRANSFORMATIONS_API AbsPropagationUp;
+class TRANSFORMATIONS_API AbsSinking;
 
 }  // namespace pass
 }  // namespace ov
@@ -84,11 +84,12 @@ public:
 
 /**
  * @ingroup ov_transformation_common_api
- * @brief AbsPropagationUp matches `concat->abs` on 1D tensors and pushes abs up the concat inputs
- * in hope that they will constant fold
+ * @brief AbsSinking optimizes out the Abs which input is non negative. Has a special case for Concat -> Abs graph, it
+ * moves Abs up through Concat to its inputs, tries to constant fold new Abs ops. In case folding fails applies
+ * optimization to the leftover Abs ops
  */
-class ov::pass::AbsPropagationUp : public ov::pass::MatcherPass {
+class ov::pass::AbsSinking : public ov::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("AbsPropagationUp", "0");
-    AbsPropagationUp();
+    OPENVINO_RTTI("AbsSinking", "0");
+    AbsSinking();
 };

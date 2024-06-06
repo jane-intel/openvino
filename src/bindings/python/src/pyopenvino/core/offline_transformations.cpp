@@ -8,6 +8,7 @@
 
 #include <compress_quantize_weights.hpp>
 #include <openvino/pass/make_stateful.hpp>
+#include <openvino/pass/sdpa_to_paged_attention.hpp>
 #include <openvino/pass/serialize.hpp>
 #include <openvino/op/shape_of.hpp>
 #include <pruning.hpp>
@@ -141,6 +142,15 @@ void regmodule_offline_transformations(py::module m) {
         [](std::shared_ptr<ov::Model> model) {
             ov::pass::Manager manager;
             manager.register_pass<ov::pass::FusedNamesCleanup>();
+            manager.run_passes(model);
+        },
+        py::arg("model"));
+
+    m_offline_transformations.def(
+        "paged_attention_transformation",
+        [](std::shared_ptr<ov::Model> model) {
+            ov::pass::Manager manager;
+            manager.register_pass<ov::pass::SDPAToPagedAttention>();
             manager.run_passes(model);
         },
         py::arg("model"));
