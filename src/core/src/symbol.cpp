@@ -2,25 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include <iostream>
 #include "openvino/core/symbol.hpp"
+
+#include <iostream>
 
 static void update(const std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>>& original,
                    std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>>& result) {
-    for (const auto &item: original) {
-        const auto &B_root = ov::symbol::ancestor_of(item.first);
-        const auto &C_root = ov::symbol::ancestor_of(item.second);
+    for (const auto& item : original) {
+        const auto& B_root = ov::symbol::ancestor_of(item.first);
+        const auto& C_root = ov::symbol::ancestor_of(item.second);
         if (result.count(B_root)) {
             // we've found two equations A + B = C and A + B = D; we deduced that C == D;
             ov::symbol::set_equal(result[B_root], C_root);
-        } else { // key B is proved to be unique so far, check for uniqueness of C
+        } else {  // key B is proved to be unique so far, check for uniqueness of C
             bool record_already_in_result = false;
             for (const auto& item_i : result) {
                 if (ov::symbol::are_equal(item_i.second, C_root)) {
                     // we've found two equations K + N = M and K + L = M; we deduced N == L;
                     ov::symbol::set_equal(item_i.first, B_root);
                     record_already_in_result = true;
-                } // we continue to search for equal results of summation to cover all of them
+                }  // we continue to search for equal results of summation to cover all of them
             }
             if (!record_already_in_result)
                 result[B_root] = C_root;
@@ -29,12 +30,11 @@ static void update(const std::unordered_map<std::shared_ptr<ov::Symbol>, std::sh
 }
 
 static std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>> merge_and_normalize(
-        const std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>>& lhs,
-        const std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>>& rhs) {
-
+    const std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>>& lhs,
+    const std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>>& rhs) {
     std::unordered_map<std::shared_ptr<ov::Symbol>, std::shared_ptr<ov::Symbol>> result;
-//    if (!lhs.empty() || !rhs.empty())
-//        std::cout << "Symbol update" << std::endl;
+    //    if (!lhs.empty() || !rhs.empty())
+    //        std::cout << "Symbol update" << std::endl;
     update(lhs, result);
     update(rhs, result);
     return result;
@@ -67,7 +67,8 @@ void ov::symbol::set_equal(const std::shared_ptr<Symbol>& lhs, const std::shared
     lhs_root->m_sum = {};
 }
 
-std::shared_ptr<ov::Symbol> ov::operator+(const std::shared_ptr<ov::Symbol>& lhs, const std::shared_ptr<ov::Symbol>& rhs) noexcept {
+std::shared_ptr<ov::Symbol> ov::operator+(const std::shared_ptr<ov::Symbol>& lhs,
+                                          const std::shared_ptr<ov::Symbol>& rhs) noexcept {
     if (!lhs || !rhs)
         return nullptr;
     const auto& lhs_root = ov::symbol::ancestor_of(lhs);

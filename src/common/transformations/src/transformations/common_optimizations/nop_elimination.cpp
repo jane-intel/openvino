@@ -3,7 +3,6 @@
 //
 
 #include "transformations/common_optimizations/nop_elimination.hpp"
-#include "transformations/symbolic_transformations/nop_broadcast.hpp"
 
 #include <functional>
 #include <memory>
@@ -48,6 +47,7 @@
 #include "openvino/pass/pattern/op/wrap_type.hpp"
 #include "openvino/util/log.hpp"
 #include "openvino/util/util.hpp"
+#include "transformations/symbolic_transformations/nop_broadcast.hpp"
 #include "transformations/utils/utils.hpp"
 
 using namespace std;

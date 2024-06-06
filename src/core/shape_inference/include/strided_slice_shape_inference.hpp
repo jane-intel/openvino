@@ -15,17 +15,16 @@ namespace op {
 namespace v1 {
 
 template <class TDim,
-        typename std::enable_if<std::is_same<typename std::decay<TDim>::type, Dimension>::value>::type* = nullptr>
+          typename std::enable_if<std::is_same<typename std::decay<TDim>::type, Dimension>::value>::type* = nullptr>
 bool check_dimension_has_same_symbol(const TDim& dim, const std::shared_ptr<ov::Symbol>& symbol) {
     return ov::symbol::are_equal(dim.get_symbol(), symbol);
 }
 
 template <class TDim,
-        typename std::enable_if<!std::is_same<typename std::decay<TDim>::type, Dimension>::value>::type* = nullptr>
+          typename std::enable_if<!std::is_same<typename std::decay<TDim>::type, Dimension>::value>::type* = nullptr>
 bool check_dimension_has_same_symbol(const TDim& dim, const std::shared_ptr<ov::Symbol>& symbol) {
     return false;
 }
-
 
 template <class T, class TRShape = result_shape_t<T>>
 std::vector<TRShape> shape_infer(const StridedSlice* op,
@@ -199,7 +198,7 @@ std::vector<TRShape> shape_infer(const StridedSlice* op,
                 auto sliced_dim = slice::make_dim(input_dim, start, stop, stride);
 
                 if (stride == 1 && start == default_start && static_cast<int64_t>(end_symbols.size()) > axis &&
-                        check_dimension_has_same_symbol(input_dim, end_symbols[axis])) {
+                    check_dimension_has_same_symbol(input_dim, end_symbols[axis])) {
                     sliced_dim = input_dim;
                 }
 

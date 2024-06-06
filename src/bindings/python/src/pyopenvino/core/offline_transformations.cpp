@@ -7,25 +7,25 @@
 #include <pybind11/stl.h>
 
 #include <compress_quantize_weights.hpp>
+#include <openvino/op/shape_of.hpp>
 #include <openvino/pass/make_stateful.hpp>
 #include <openvino/pass/sdpa_to_paged_attention.hpp>
 #include <openvino/pass/serialize.hpp>
-#include <openvino/op/shape_of.hpp>
 #include <pruning.hpp>
 #include <transformations/common_optimizations/compress_float_constants.hpp>
 #include <transformations/common_optimizations/fused_names_cleanup.hpp>
-#include <transformations/resolve_names_collisions.hpp>
 #include <transformations/common_optimizations/mark_precision_sensitive_shapeof_subgraphs.hpp>
 #include <transformations/common_optimizations/moc_legacy_transformations.hpp>
 #include <transformations/common_optimizations/moc_transformations.hpp>
 #include <transformations/flush_fp32_subnormals_to_zero.hpp>
 #include <transformations/op_conversions/convert_sequences_to_tensor_iterator.hpp>
+#include <transformations/resolve_names_collisions.hpp>
 #include <transformations/smart_reshape/smart_reshape.hpp>
 #include <transformations/symbolic_transformations/symbolic_optimizations.hpp>
 
+#include "openvino/pass/constant_folding.hpp"
 #include "openvino/pass/low_latency.hpp"
 #include "openvino/pass/manager.hpp"
-#include "openvino/pass/constant_folding.hpp"
 
 namespace py = pybind11;
 

@@ -290,7 +290,9 @@ bool evaluate_as_partial_shape(const ov::Output<ov::Node>& output, ov::PartialSh
         std::vector<Dimension> resulting_pshape(lower_bound.size());
         for (size_t i = 0; i < lower_bound.size(); ++i) {
             auto low = lower_bound[i], up = upper_bound[i];
-            OPENVINO_ASSERT(low >= 0 && up >= 0, "Value for partial shape evaluation can't be lower than zero. ", output);
+            OPENVINO_ASSERT(low >= 0 && up >= 0,
+                            "Value for partial shape evaluation can't be lower than zero. ",
+                            output);
             if (output.get_element_type() == element::i32 && low != up) {
                 if (up == std::numeric_limits<std::int32_t>::max())
                     up = std::numeric_limits<std::int64_t>::max();

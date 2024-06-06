@@ -6,12 +6,12 @@
 
 #include "compare.hpp"
 #include "itt.hpp"
+#include "openvino/core/bound_evaluation_util.hpp"
 #include "openvino/core/dimension.hpp"
 #include "openvino/core/validation_util.hpp"
-#include "openvino/core/bound_evaluation_util.hpp"
 #include "openvino/op/broadcast.hpp"
-#include "openvino/op/maximum.hpp"
 #include "openvino/op/greater_eq.hpp"
+#include "openvino/op/maximum.hpp"
 #include "openvino/op/reduce_logical_and.hpp"
 #include "openvino/op/shape_of.hpp"
 #include "openvino/pass/pattern/op/or.hpp"
@@ -71,7 +71,8 @@ ov::pass::NopBroadcastSubGraph::NopBroadcastSubGraph() {
     auto tensor_label = pattern::any_input(pattern::has_static_shape());
     auto maximum = pattern::wrap_type<op::v1::Maximum>({shape_label, tensor_label});
 
-    auto broadcast_3_ins = pattern::wrap_type<op::v1::Broadcast, op::v3::Broadcast>({data_label, maximum, pattern::any_input()});
+    auto broadcast_3_ins =
+        pattern::wrap_type<op::v1::Broadcast, op::v3::Broadcast>({data_label, maximum, pattern::any_input()});
     auto broadcast_2_ins = pattern::wrap_type<op::v1::Broadcast, op::v3::Broadcast>({data_label, maximum});
     auto broadcast = make_shared<pattern::op::Or>(OutputVector{broadcast_2_ins, broadcast_3_ins});
 
@@ -97,8 +98,10 @@ ov::pass::NopBroadcastSubGraph::NopBroadcastSubGraph() {
 }
 
 static bool tensor_non_negative(const ov::Tensor& tensor) {
-    const auto& lower = std::make_shared<op::v0::Parameter>(tensor.get_element_type(), ov::PartialShape(tensor.get_shape()));
-    const auto& gr_eq = std::make_shared<op::v1::GreaterEqual>(lower, op::v0::Constant::create(tensor.get_element_type(), {}, {0}));
+    const auto& lower =
+        std::make_shared<op::v0::Parameter>(tensor.get_element_type(), ov::PartialShape(tensor.get_shape()));
+    const auto& gr_eq =
+        std::make_shared<op::v1::GreaterEqual>(lower, op::v0::Constant::create(tensor.get_element_type(), {}, {0}));
     auto axes_vector = std::vector<int64_t>(tensor.get_shape().size());
     std::iota(axes_vector.begin(), axes_vector.end(), 0);
     const auto axes = op::v0::Constant::create(element::i64, {axes_vector.size()}, axes_vector);
@@ -113,14 +116,16 @@ ov::pass::NopBroadcastSubGraph2::NopBroadcastSubGraph2() {
     MATCHER_SCOPE(NopBroadcastSubGraph2);
 
     auto data_label = pattern::any_input([](Output<Node> out) {
-        return out.get_partial_shape().is_static() && ov::shape_size(out.get_shape()) > 0; });
+        return out.get_partial_shape().is_static() && ov::shape_size(out.get_shape()) > 0;
+    });
 
     auto tensor_label = pattern::any_input();
     auto ones = INT_CONSTANT_WITH_PREDICATE(std::all_of(value.begin(), value.end(), cmp::Equal<int64_t>(1)));
 
     auto maximum = pattern::wrap_type<op::v1::Maximum>({tensor_label, ones});
 
-    auto broadcast_3_ins = pattern::wrap_type<op::v1::Broadcast, op::v3::Broadcast>({data_label, maximum, pattern::any_input()});
+    auto broadcast_3_ins =
+        pattern::wrap_type<op::v1::Broadcast, op::v3::Broadcast>({data_label, maximum, pattern::any_input()});
     auto broadcast_2_ins = pattern::wrap_type<op::v1::Broadcast, op::v3::Broadcast>({data_label, maximum});
     auto broadcast = make_shared<pattern::op::Or>(OutputVector{broadcast_2_ins, broadcast_3_ins});
 

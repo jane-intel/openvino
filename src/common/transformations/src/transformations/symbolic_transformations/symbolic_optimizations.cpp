@@ -12,14 +12,15 @@
 #include "openvino/op/range.hpp"
 #include "openvino/op/reshape.hpp"
 #include "openvino/op/select.hpp"
-#include "openvino/op/softmax.hpp"
 #include "openvino/op/shape_of.hpp"
+#include "openvino/op/softmax.hpp"
 #include "openvino/op/util/symbolic_info.hpp"
 #include "openvino/pass/manager.hpp"
 #include "openvino/pass/pattern/op/or.hpp"
 #include "openvino/pass/pattern/op/pattern.hpp"
 #include "openvino/pass/pattern/op/wrap_type.hpp"
 #include "openvino/pass/visualize_tree.hpp"
+#include "openvino/util/env_util.hpp"
 #include "transformations/common_optimizations/dimension_tracking.hpp"
 #include "transformations/common_optimizations/nop_elimination.hpp"
 #include "transformations/common_optimizations/shared_ops_optimization.hpp"
@@ -31,7 +32,6 @@
 #include "transformations/symbolic_transformations/symbol_optimization.hpp"
 #include "transformations/symbolic_transformations/utils.hpp"
 #include "transformations/utils/utils.hpp"
-#include "openvino/util/env_util.hpp"
 
 using namespace ov::pass;
 using namespace ov::symbol::util;
@@ -278,7 +278,7 @@ ov::pass::SymbolicOptimizations::SymbolicOptimizations(bool full_run) {
 }
 
 static std::vector<bool> constant_mask(const ov::descriptor::Tensor& tensor) {
-    const auto& lv = tensor.get_lower_value(), &uv = tensor.get_upper_value();
+    const auto &lv = tensor.get_lower_value(), &uv = tensor.get_upper_value();
     if (!lv || !uv)
         return {};
     const auto& lower = std::make_shared<ov::op::v0::Parameter>(lv.get_element_type(), lv.get_shape());
@@ -360,20 +360,22 @@ static void unique_symbols_in_model(const std::shared_ptr<ov::Model>& m) {
 
         if (need_shape_inference) {
             num_shape_inferences += 1;
-//            std::cout << "SI: " << node->get_type_name() << " " << node->get_friendly_name() << std::endl;
+            //            std::cout << "SI: " << node->get_type_name() << " " << node->get_friendly_name() << std::endl;
         }
         if (need_value_inference) {
-//            std::cout << "VI: " << node->get_type_name() << " " << node->get_friendly_name() << std::endl;
+            //            std::cout << "VI: " << node->get_type_name() << " " << node->get_friendly_name() << std::endl;
             num_value_inferences += 1;
         }
     }
     std::cout << "# ops: " << m->get_ops().size() << std::endl;
     std::cout << "# shape sub-graph ops: " << num_shape_op_ops << std::endl;
     std::cout << "# shape of ops: " << num_shape_of_ops << std::endl;
-    std::cout << "# shape inferences: " << num_shape_inferences << " aka new symbol appeared as an outcome of an op" << std::endl;
-    std::cout << "# value inferences: " << num_value_inferences << " aka new symbol appeared on ShapeOf sub-graph" << std::endl;
+    std::cout << "# shape inferences: " << num_shape_inferences << " aka new symbol appeared as an outcome of an op"
+              << std::endl;
+    std::cout << "# value inferences: " << num_value_inferences << " aka new symbol appeared on ShapeOf sub-graph"
+              << std::endl;
     std::cout << "# symbols: " << known_symbols.size() << std::endl;
-//    ov::pass::VisualizeTree(ov::util::getenv_string("OV_VISUALIZE_PATH")).run_on_model(m);
+    //    ov::pass::VisualizeTree(ov::util::getenv_string("OV_VISUALIZE_PATH")).run_on_model(m);
 }
 
 bool ov::pass::SymbolicOptimizations::run_on_model(const std::shared_ptr<ov::Model>& m) {
